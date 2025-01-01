@@ -14,6 +14,7 @@ import {
   Box,
 } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
+import Inventory from './components/Inventory.js';
 
 export default function ChocolateInventory() {
   const [file, setFile] = useState(null);
@@ -21,29 +22,29 @@ export default function ChocolateInventory() {
   const [brand, setBrand] = useState("");
   const [price, setPrice] = useState("");
   const [quantityAvailable, setQuantityAvailable] = useState("");
-  const [thumbnails, setThumbnails] = useState([]); // State to manage thumbnails
+  const [inventory, setInventory] = useState([]); // State to manage inventory
   const [openModal, setOpenModal] = useState(false); // State to control modal
 
-  const fetchThumbnails = async () => {
+  const fetchInventory= async () => {
     try {
-      const response = await fetch("/api/get-thumbnails");
+      const response = await fetch("/api/get-inventory");
       const data = await response.json();
       if (response.ok) {
-        setThumbnails(data.thumbnails);
+        setInventory(data.inventory);
       } else {
-        console.error("Error fetching thumbnails:", data.error);
+        console.error("Error fetching inventory:", data.error);
       }
     } catch (error) {
-      console.error("Failed to fetch thumbnails:", error);
+      console.error("Failed to fetch inventory:", error);
     }
   };
 
   useEffect(() => {
-    fetchThumbnails(); // Fetch on initial render
+    fetchInventory(); // Fetch on initial render
 
     const intervalId = setInterval(() => {
-      fetchThumbnails(); // Update every 10 seconds
-    }, 30000);
+      fetchInventory(); // Update every 5minutes
+    }, 300000);
 
     return () => clearInterval(intervalId); // Cleanup interval on unmount
   }, []);
@@ -69,43 +70,25 @@ export default function ChocolateInventory() {
 
       const { blobUrl } = await uploadRes.json();
 
-      // Save metadata
-      const saveRes = await fetch("/api/save-metadata", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name,
-          brand,
-          price,
-          quantityAvailable,
-          blobUrl,
-        }),
-      });
-
-      if (!saveRes.ok) {
-        alert("Failed to save metadata.");
-        return;
-      }
-
-      alert("Inventory updated successfully!");
-
       try {
-                // Send event
-                const response = await fetch("/api/send-event", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify([{ body: { name, brand, blobUrl } }]),
-                });
-        
-                if (!response.ok) {
-                  throw new Error(`Failed to send event: ${response.statusText}`);
-                }
-        
-                alert("Event sent to Event Hub!");
-              } catch (error) {
-                console.error("Error sending event:", error);
-                alert("An error occurred while sending the event. Please try again.");
-              }
+        // Send event
+        const response = await fetch("/api/send-event", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify([
+            { body: { name, brand, price, quantityAvailable, blobUrl } },
+          ]),
+        });
+
+        if (!response.ok) {
+          throw new Error(`Failed to send event: ${response.statusText}`);
+        }
+
+        alert("Event sent to Event Hub!");
+      } catch (error) {
+        console.error("Error sending event:", error);
+        alert("An error occurred while sending the event. Please try again.");
+      }
 
       // Reset form fields
       setFile(null);
@@ -121,13 +104,22 @@ export default function ChocolateInventory() {
     }
   };
 
+  const updateProduct = (name, price, quantityAvailable) => {
+    // Logic to update the product
+    console.log('Updating product:', name, price, quantityAvailable);
+    setInventory((prevInventory) =>
+      prevInventory.map((product) =>
+        product.name === name
+          ? { ...product, price, quantityAvailable } // Update matching product
+          : product // Keep other products unchanged
+      )
+    );
+  };
+  
   return (
     <Container sx={{ py: 4 }}>
-      <h1>
-        Melty Magic Inventory Management - Azure Ascendants
-      </h1>
-      <hr></hr>
-      <Box sx={{ display: "flex", justifyContent: "center", my: 4 }}>
+      <Box sx={{ display: "flex", justifyContent: "space-between", my: 4 }}>
+      <h2>Melty Magic Inventory Management - Azure Ascendants</h2>
         <Button
           variant="contained"
           color="primary"
@@ -208,17 +200,7 @@ export default function ChocolateInventory() {
         </Box>
       </Dialog>
 
-      {/* Thumbnails Grid */}
-      <Grid container spacing={3}>
-        {thumbnails.map((url, index) => (
-          <Grid item xs={12} sm={6} md={4} key={index}>
-            <Card sx={{ maxWidth: 1505 }}>
-              <CardMedia component="img" height="300" image={url} alt={url} />
-            </Card>
-          </Grid>
-        ))}
-      </Grid>
+      <Inventory inventory={inventory} updateProduct={updateProduct} />
     </Container>
   );
 }
-
